@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+.ruff_cache/
+
+# data and artifacts never go to git (versioned separately later)
+data/*
+!data/.gitkeep
+runs/
+*.pt
+*.onnx
+*.engine
+
+.env
+kaggle.json
+.ipynb_checkpoints/

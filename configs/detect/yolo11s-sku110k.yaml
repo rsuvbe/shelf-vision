@@ -1,0 +1,16 @@
+# Baseline product detector on SKU-110K (one class: "object").
+# Shelves are dense (about 150 boxes per image), so high resolution and a high
+# max_det matter more than model size.
+model: yolo11s.pt
+data: SKU-110K.yaml   # ultralytics downloads the dataset on first use (~13 GB)
+
+train:
+  epochs: 60
+  imgsz: 960
+  batch_per_8gb: 6    # scaled by env.Runtime.batch_for to the GPUs available
+  max_det: 600
+  amp: true
+  cache: false
+  patience: 15
+  seed: 0
+  plots: true
