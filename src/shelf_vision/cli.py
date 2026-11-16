@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Annotated
 
 import typer
 import yaml
@@ -17,6 +18,15 @@ def _load(config: Path) -> dict:
         return yaml.safe_load(f)
 
 
+def _use_data_dir(rt: env.Runtime) -> None:
+    """Make ultralytics download and look up datasets in our data directory."""
+    from ultralytics import settings
+
+    rt.data_dir.mkdir(parents=True, exist_ok=True)
+    if settings.get("datasets_dir") != str(rt.data_dir):
+        settings.update(datasets_dir=str(rt.data_dir))
+
+
 @app.command()
 def doctor() -> None:
     """Show where we are running and what hardware is available."""
@@ -27,14 +37,17 @@ def doctor() -> None:
 
 @app.command()
 def train(
-    config: Path = typer.Argument(..., exists=True, help="configs/detect/*.yaml"),
-    smoke: bool = typer.Option(False, help="1 epoch on a small fraction: checks the pipeline"),
+    config: Annotated[Path, typer.Argument(exists=True, help="configs/detect/*.yaml")],
+    smoke: Annotated[
+        bool, typer.Option(help="1 epoch on a small fraction: checks the pipeline")
+    ] = False,
 ) -> None:
     """Train a detector from a config."""
     from ultralytics import YOLO
 
     cfg = _load(config)
     rt = env.detect()
+    _use_data_dir(rt)
     args = dict(cfg["train"])
     args["batch"] = rt.batch_for(args.pop("batch_per_8gb"))
     if smoke:
@@ -54,8 +67,8 @@ def train(
 
 @app.command()
 def evaluate(
-    weights: Path = typer.Argument(..., exists=True),
-    config: Path = typer.Argument(..., exists=True),
+    weights: Annotated[Path, typer.Argument(exists=True)],
+    config: Annotated[Path, typer.Argument(exists=True)],
     split: str = "test",
 ) -> None:
     """Evaluate weights on a held-out split."""
@@ -63,6 +76,7 @@ def evaluate(
 
     cfg = _load(config)
     rt = env.detect()
+    _use_data_dir(rt)
     metrics = YOLO(str(weights)).val(
         data=cfg["data"],
         split=split,
