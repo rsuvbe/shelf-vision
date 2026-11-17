@@ -35,19 +35,21 @@ def doctor() -> None:
         typer.echo(f"{key:10} {value}")
 
 
-def _dataset(cfg: dict, config: Path) -> str:
-    """Dataset YAML for a config, with the config's `exclude` list applied.
+def _dataset(cfg: dict, config: Path, rt: env.Runtime) -> str:
+    """Dataset YAML for a config, rooted in our data directory.
 
-    Downloads and converts the dataset on first use.
+    Downloads and converts the dataset on first use, then applies the config's
+    `exclude` list.
     """
+    from shelf_vision.data import in_data_dir, without_excluded
+
+    data = in_data_dir(cfg["data"], rt.data_dir)
     if "exclude" not in cfg:
         from ultralytics.data.utils import check_det_dataset
 
-        check_det_dataset(cfg["data"])
-        return cfg["data"]
-    from shelf_vision.data import without_excluded
-
-    return without_excluded(cfg["data"], (config.parent / cfg["exclude"]).resolve())
+        check_det_dataset(data)
+        return data
+    return without_excluded(data, (config.parent / cfg["exclude"]).resolve())
 
 
 @app.command()
@@ -57,7 +59,7 @@ def prepare(
     """Download and convert the config's dataset without training."""
     rt = env.detect()
     _use_data_dir(rt)
-    typer.echo(_dataset(_load(config), config))
+    typer.echo(_dataset(_load(config), config, rt))
 
 
 @app.command()
@@ -85,7 +87,7 @@ def train(
     cfg = _load(config)
     rt = env.detect()
     _use_data_dir(rt)
-    data = _dataset(cfg, config)
+    data = _dataset(cfg, config, rt)
     if epochs and hours:
         raise typer.BadParameter("use either --epochs or --hours")
     suffix = "-smoke" if smoke else f"-e{epochs}" if epochs else f"-{hours:g}h" if hours else ""
@@ -134,7 +136,7 @@ def evaluate(
     rt = env.detect()
     _use_data_dir(rt)
     metrics = YOLO(str(weights)).val(
-        data=_dataset(cfg, config),
+        data=_dataset(cfg, config, rt),
         split=split,
         imgsz=cfg["train"]["imgsz"],
         device=rt.device.split(",")[0],

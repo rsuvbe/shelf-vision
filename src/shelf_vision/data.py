@@ -18,6 +18,32 @@ def drop_from_list(lines: list[str], names: set[str]) -> list[str]:
     return [line for line in lines if line.strip() and Path(line.strip()).name not in names]
 
 
+def pin_dataset_root(spec: dict, data_dir: Path) -> dict:
+    """Dataset spec whose relative `path` is resolved against `data_dir`."""
+    root = Path(spec.get("path") or "")
+    if not root.is_absolute():
+        root = data_dir / root
+    return {**spec, "path": str(root)}
+
+
+def in_data_dir(data: str, data_dir: Path) -> str:
+    """Copy of a dataset YAML with its root pinned under `data_dir`.
+
+    ultralytics resolves relative dataset paths against `datasets_dir`, which it
+    reads once at import time; changing the setting later has no effect, so on
+    a fresh machine (Kaggle) data would land in the default directory instead.
+    An absolute root makes the location independent of ultralytics settings.
+    """
+    from ultralytics.utils import YAML
+    from ultralytics.utils.checks import check_yaml
+
+    spec = pin_dataset_root(YAML.load(check_yaml(data)), data_dir)
+    out = data_dir / f"{Path(data).stem}.yaml"
+    data_dir.mkdir(parents=True, exist_ok=True)
+    out.write_text(yaml.safe_dump(spec, sort_keys=False, allow_unicode=True))
+    return str(out)
+
+
 def without_excluded(data: str, exclude: Path) -> str:
     """Dataset YAML equal to `data`, minus the listed training images.
 

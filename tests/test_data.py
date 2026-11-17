@@ -13,3 +13,11 @@ def test_drop_from_list_matches_by_file_name():
         "./images/train_10.jpg",
         "./images/train_2.jpg",
     ]
+
+
+def test_pin_dataset_root_makes_relative_root_absolute(tmp_path):
+    from shelf_vision.data import pin_dataset_root
+
+    spec = {"path": "SKU-110K", "train": "train.txt", "names": {0: "object"}}
+    assert pin_dataset_root(spec, tmp_path)["path"] == str(tmp_path / "SKU-110K")
+    assert pin_dataset_root({"path": "/abs/ds"}, tmp_path)["path"] == "/abs/ds"
