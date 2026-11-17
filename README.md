@@ -39,12 +39,20 @@ uv run pytest
 
 ## Running on Kaggle
 
-In a notebook with GPU and internet enabled:
+Full training runs from `notebooks/kaggle_train.ipynb`: import it into Kaggle
+(File → Import Notebook), set the accelerator to GPU T4 x2 and turn Internet
+on, then Save & Run All. The notebook downloads the dataset, trains with
+`shelf train --hours` for the rest of the 12-hour session (the epoch count and
+LR schedule are fitted to that time) and evaluates on the test split.
+
+By hand, in a notebook with GPU and internet enabled:
 
 ```python
 !git clone https://github.com/rsuvbe/shelf-vision && pip install -q -e shelf-vision
+%env SHELF_DATA_DIR=/tmp/shelf-data
 !shelf doctor
-!shelf train shelf-vision/configs/detect/yolo11s-sku110k.yaml
+!bash shelf-vision/scripts/fetch_sku110k.sh /tmp/shelf-data
+!shelf train shelf-vision/configs/detect/yolo11s-sku110k.yaml --hours 11
 ```
 
 Checkpoints land in `/kaggle/working/runs`; download `best.pt` into `runs/`

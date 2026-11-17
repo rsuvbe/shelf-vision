@@ -36,12 +36,28 @@ def doctor() -> None:
 
 
 def _dataset(cfg: dict, config: Path) -> str:
-    """Dataset YAML for a config, with the config's `exclude` list applied."""
+    """Dataset YAML for a config, with the config's `exclude` list applied.
+
+    Downloads and converts the dataset on first use.
+    """
     if "exclude" not in cfg:
+        from ultralytics.data.utils import check_det_dataset
+
+        check_det_dataset(cfg["data"])
         return cfg["data"]
     from shelf_vision.data import without_excluded
 
     return without_excluded(cfg["data"], (config.parent / cfg["exclude"]).resolve())
+
+
+@app.command()
+def prepare(
+    config: Annotated[Path, typer.Argument(exists=True, help="configs/detect/*.yaml")],
+) -> None:
+    """Download and convert the config's dataset without training."""
+    rt = env.detect()
+    _use_data_dir(rt)
+    typer.echo(_dataset(_load(config), config))
 
 
 @app.command()
@@ -53,6 +69,14 @@ def train(
     epochs: Annotated[
         int | None, typer.Option(help="override the config; the run is named <config>-eN")
     ] = None,
+    hours: Annotated[
+        float | None,
+        typer.Option(
+            help="train for this many hours instead of a fixed number of epochs; "
+            "the epoch count and LR schedule are fitted after the first epoch "
+            "(run named <config>-<H>h)"
+        ),
+    ] = None,
     resume: Annotated[bool, typer.Option(help="continue the run from its weights/last.pt")] = False,
 ) -> None:
     """Train a detector from a config."""
@@ -62,7 +86,10 @@ def train(
     rt = env.detect()
     _use_data_dir(rt)
     data = _dataset(cfg, config)
-    name = config.stem + ("-smoke" if smoke else f"-e{epochs}" if epochs else "")
+    if epochs and hours:
+        raise typer.BadParameter("use either --epochs or --hours")
+    suffix = "-smoke" if smoke else f"-e{epochs}" if epochs else f"-{hours:g}h" if hours else ""
+    name = config.stem + suffix
     project = rt.runs_dir / "detect"
 
     if resume:
@@ -77,6 +104,8 @@ def train(
     args["batch"] = rt.batch_for(args.pop("batch_per_8gb"))
     if epochs:
         args["epochs"] = epochs
+    if hours:
+        args["time"] = hours
     if smoke:
         args.update(epochs=1, fraction=0.02)
 
