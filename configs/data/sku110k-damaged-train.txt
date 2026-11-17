@@ -1,0 +1,29 @@
+# SKU-110K training images whose pixel data is damaged (truncated file or broken
+# entropy stream: part of the photo decodes as grey blocks while the labels still
+# describe products there). Found by decoding every file with libjpeg; see README.
+# Val and test are left untouched so metrics stay comparable with published ones.
+train_305.jpg
+train_340.jpg
+train_775.jpg
+train_882.jpg
+train_903.jpg
+train_924.jpg
+train_1239.jpg
+train_2376.jpg
+train_2903.jpg
+train_2986.jpg
+train_3240.jpg
+train_3556.jpg
+train_3560.jpg
+train_4222.jpg
+train_5007.jpg
+train_5822.jpg
+train_6052.jpg
+train_6090.jpg
+train_6138.jpg
+train_6409.jpg
+train_6788.jpg
+train_7576.jpg
+train_7622.jpg
+train_7883.jpg
+train_8146.jpg

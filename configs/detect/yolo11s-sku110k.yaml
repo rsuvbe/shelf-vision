@@ -3,12 +3,13 @@
 # max_det matter more than model size.
 model: yolo11s.pt
 data: SKU-110K.yaml   # ultralytics downloads the dataset on first use (~13 GB)
+exclude: ../data/sku110k-damaged-train.txt   # 25 train photos with damaged pixels
 
 train:
   epochs: 60
   imgsz: 960
   batch_per_8gb: 6    # scaled by env.Runtime.batch_for to the GPUs available
-  max_det: 600
+  max_det: 1000   # val has up to 718 boxes per image; 600 capped recall
   amp: true
   cache: false
   patience: 15

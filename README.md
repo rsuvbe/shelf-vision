@@ -33,6 +33,7 @@ paths, GPU count and batch size.
 uv sync                      # Python 3.14, PyTorch built for CUDA 12.8
 uv run shelf doctor          # shows runtime, GPU, paths
 uv run shelf train configs/detect/yolo11s-sku110k.yaml --smoke
+uv run shelf train configs/detect/yolo11s-sku110k.yaml --epochs 5   # short real run
 uv run pytest
 ```
 
@@ -48,6 +49,18 @@ In a notebook with GPU and internet enabled:
 
 Checkpoints land in `/kaggle/working/runs`; download `best.pt` into `runs/`
 locally for evaluation and export.
+
+A Kaggle session is limited to 12 hours. To continue an interrupted run, put its
+`last.pt` back at `runs/detect/<run name>/weights/last.pt` and add `--resume`.
+
+## Data notes
+
+SKU-110K ships with some broken JPEGs. Decoding all 11,743 files with libjpeg
+shows that every file opens, but 35 have damaged pixel data (truncated file or
+broken entropy stream): 25 in train, 1 in val, 9 in test. The 25 training files
+are listed in `configs/data/sku110k-damaged-train.txt` and left out of training
+through the config's `exclude` key. Val and test are untouched, so metrics stay
+comparable with published results.
 
 The package supports Python 3.11+ so it installs on Kaggle's interpreter; the
 local environment is pinned to 3.14 in `.python-version`.
