@@ -1,0 +1,26 @@
+# Short fine-tune of a trained SKU-110K detector: the annealing phase the
+# 11.32h run skipped because early stopping fired at epoch 83 of 146 (LR was
+# still ~0.0009 and the mosaic-free epochs never ran).
+#
+# Start it from the previous run's weights:
+#   shelf train configs/detect/yolo11s-sku110k-ft.yaml --weights <run>/weights/best.pt
+model: yolo11s.pt   # placeholder; pass --weights
+data: SKU-110K.yaml
+exclude: ../data/sku110k-damaged-train.txt
+
+train:
+  epochs: 12          # ~4.7 min/epoch on 2x T4, about 1 hour
+  imgsz: 960
+  batch_per_8gb: 6
+  max_det: 1000
+  amp: true
+  cache: false
+  patience: 0         # the whole point is to finish the schedule
+  seed: 0
+  plots: true
+  # explicit optimizer: with "auto" ultralytics ignores lr0 and picks its own
+  optimizer: AdamW
+  lr0: 0.0005         # a bit below where the base run stopped (~0.0009)
+  lrf: 0.1            # linear decay to 0.00005
+  warmup_epochs: 0    # weights are already trained, no warmup needed
+  close_mosaic: 6     # last 6 epochs on real, un-mosaicked shelf photos

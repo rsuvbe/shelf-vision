@@ -80,6 +80,10 @@ def train(
         ),
     ] = None,
     resume: Annotated[bool, typer.Option(help="continue the run from its weights/last.pt")] = False,
+    weights: Annotated[
+        Path | None,
+        typer.Option(exists=True, help="start from these weights instead of the config's model"),
+    ] = None,
 ) -> None:
     """Train a detector from a config."""
     from ultralytics import YOLO
@@ -108,10 +112,13 @@ def train(
         args["epochs"] = epochs
     if hours:
         args["time"] = hours
+        # The schedule is stretched over the whole time budget, so early stopping
+        # would cut it off before the LR decays and close_mosaic kicks in.
+        args["patience"] = 0
     if smoke:
         args.update(epochs=1, fraction=0.02)
 
-    model = YOLO(cfg["model"])
+    model = YOLO(str(weights) if weights else cfg["model"])
     model.train(
         data=data,
         project=str(project),
