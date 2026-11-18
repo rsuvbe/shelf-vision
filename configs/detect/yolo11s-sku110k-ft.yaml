@@ -1,6 +1,7 @@
-# Short fine-tune of a trained SKU-110K detector: the annealing phase the
-# 11.32h run skipped because early stopping fired at epoch 83 of 146 (LR was
-# still ~0.0009 and the mosaic-free epochs never ran).
+# Short fine-tune of a trained SKU-110K detector (low LR, mosaic-free finish).
+# First tried as the annealing phase the 11.32h run skipped (early stop at
+# epoch 83 of 146): it overfit, test mAP50-95 0.601 vs 0.604 for the base
+# weights, so on the same data it does not help. Kept for new-data fine-tunes.
 #
 # Start it from the previous run's weights:
 #   shelf train configs/detect/yolo11s-sku110k-ft.yaml --weights <run>/weights/best.pt

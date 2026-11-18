@@ -112,9 +112,6 @@ def train(
         args["epochs"] = epochs
     if hours:
         args["time"] = hours
-        # The schedule is stretched over the whole time budget, so early stopping
-        # would cut it off before the LR decays and close_mosaic kicks in.
-        args["patience"] = 0
     if smoke:
         args.update(epochs=1, fraction=0.02)
 

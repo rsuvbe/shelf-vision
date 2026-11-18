@@ -58,14 +58,15 @@ By hand, in a notebook with GPU and internet enabled:
 Checkpoints land in `/kaggle/working/runs`; download `best.pt` into `runs/`
 locally for evaluation and export.
 
-`--hours` turns early stopping off: the LR schedule is stretched over the whole
-budget, and stopping early leaves it unfinished (the first 11.32h run stopped at
-epoch 83 of 146 with the LR still high and no mosaic-free epochs).
+Early stopping stays on with `--hours`. The first 11.32h run stopped at epoch
+83 of 146 with the LR still high, but that was a real plateau: a 12-epoch
+annealing fine-tune from its `best.pt` (low LR, last 6 epochs without mosaic)
+overfit and scored 0.601 test mAP50-95 against 0.604 for the base weights.
 
-To fine-tune a finished run, use `notebooks/kaggle_finetune.ipynb` with the
-training notebook's output attached as an input. It runs
-`configs/detect/yolo11s-sku110k-ft.yaml` (12 epochs, low LR, last 6 without
-mosaic) from that run's `best.pt` and evaluates both on the test split. Locally:
+To fine-tune a finished run (for example on new data), use
+`notebooks/kaggle_finetune.ipynb` with the training notebook's output attached
+as an input. It runs `configs/detect/yolo11s-sku110k-ft.yaml` from that run's
+`best.pt` and evaluates both on the test split. Locally:
 `shelf train configs/detect/yolo11s-sku110k-ft.yaml --weights <run>/weights/best.pt`.
 
 A Kaggle session is limited to 12 hours. To continue an interrupted run, put its

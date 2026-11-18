@@ -12,6 +12,6 @@ train:
   max_det: 1000   # val has up to 718 boxes per image; 600 capped recall
   amp: true
   cache: false
-  patience: 15        # fixed-epoch runs only; `--hours` turns early stopping off
+  patience: 15        # also with --hours: the 11.32h run plateaued by epoch ~60
   seed: 0
   plots: true
