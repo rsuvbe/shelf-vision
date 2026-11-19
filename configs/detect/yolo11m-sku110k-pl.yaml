@@ -1,0 +1,35 @@
+# YOLO11m fine-tune on SKU-110K with pseudo-labelled train boxes, at 1280.
+#
+# Why: SKU-110K train has whole shelves left unlabelled (e.g. train_6216: 18
+# boxes on a shelf of ~170 products), so training punishes correct detections.
+# The 11m run (test mAP50-95 0.612) re-labelled train at imgsz 1280: boxes with
+# conf >= 0.6 and IoU < 0.3 to every GT box were added (+26.4k boxes, +2.2%, in
+# 5280 of 8194 files). Val and test labels are untouched, so test numbers stay
+# comparable with earlier runs. The notebook overlays those train labels on the
+# downloaded dataset before training.
+#
+# Also 1280 instead of 960: evaluating the 960-trained 11m at 1280 already gave
+# +0.3 mAP50-95 with no training, so the dense small boxes want more pixels.
+#
+# Start it from the 11m run's weights:
+#   shelf train configs/detect/yolo11m-sku110k-pl.yaml --weights <run>/weights/best.pt
+model: yolo11m.pt   # placeholder; pass --weights
+data: SKU-110K.yaml
+exclude: ../data/sku110k-damaged-train.txt
+
+train:
+  epochs: 25          # est. ~10 min/epoch on 2x T4 at 1280 (960 took 5.5), ~4-5 h
+  imgsz: 1280
+  batch_per_8gb: 2    # 960 used 5.6 GB at batch 4; 1280 has ~1.8x the pixels
+  max_det: 1000
+  amp: true
+  cache: false
+  patience: 0         # short schedule, let it finish
+  seed: 0
+  plots: true
+  # explicit optimizer: with "auto" ultralytics ignores lr0 and picks its own
+  optimizer: AdamW
+  lr0: 0.0008         # new labels and a new resolution, so a bit above the 11s ft
+  lrf: 0.1
+  warmup_epochs: 1    # one epoch to adapt to the 1280 input scale
+  close_mosaic: 8     # last 8 epochs on real, un-mosaicked shelf photos
