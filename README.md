@@ -22,6 +22,11 @@ uv run shelf predict runs/weights/yolo11m-sku110k.pt configs/detect/yolo11m-sku1
 uv run shelf evaluate runs/weights/yolo11m-sku110k.pt configs/detect/yolo11m-sku110k.yaml --split test
 ```
 
+Live demo: a Gradio app in `space/` (upload a shelf photo, get boxes and a
+count), deployed as a Hugging Face Space. It runs on CPU with the settings
+above. Deploy or update it with
+`hf upload <user>/shelf-product-counter space . --repo-type space`.
+
 ### How it got here
 
 SKU-110K test split (2,936 photos, ~147 products each). mAP50-95 from
