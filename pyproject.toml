@@ -12,6 +12,9 @@ dependencies = [
     "typer>=0.12",
 ]
 
+[project.optional-dependencies]
+bot = ["python-telegram-bot>=22.8", "onnxruntime>=1.22"]
+
 [project.scripts]
 shelf = "shelf_vision.cli:app"
 

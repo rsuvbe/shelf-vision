@@ -31,6 +31,26 @@ leaves the device; about 2 s per photo on a laptop CPU. To update it:
 `demo/gradio/` is the same demo as a server-side Gradio app, for running
 locally (`python demo/gradio/app.py`); Gradio Spaces need HF PRO.
 
+### Telegram bot
+
+Send the bot a shelf photo, get it back with every product boxed and the count.
+It uses the ONNX export (`shelf_vision.counter`: numpy + onnxruntime, no torch),
+downloaded from the release on first start; on val it counts within 13.4
+products per photo (8.7%), 0.6 s per photo on a laptop CPU.
+
+```bash
+uv sync --extra bot
+echo "SHELF_BOT_TOKEN=<token from @BotFather>" >> .env     # .env is git-ignored
+uv run shelf bot                                           # long polling, no public URL
+uv run shelf bot --allowed 123,456 --save                  # only these users; keep photos
+```
+
+`--save` stores every received photo with its count in `runs/bot/photos/<date>/`,
+which turns the bot into a data collection tool for shop pilots. Without
+`--allowed` anyone who finds the bot can use it; a stranger gets their Telegram
+id in the reply, so it is easy to add them. In chat, `/conf 0.3` changes the
+confidence threshold for that chat.
+
 ### How it got here
 
 SKU-110K test split (2,936 photos, ~147 products each). mAP50-95 from

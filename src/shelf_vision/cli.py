@@ -209,5 +209,38 @@ def predict(
     typer.echo(f"{len(counts)} images, {sum(counts.values())} products -> {out}")
 
 
+@app.command()
+def bot(
+    model: Annotated[
+        Path, typer.Option(help="ONNX detector; downloaded from the detector-v1 release if missing")
+    ] = env.REPO_ROOT / "runs" / "weights" / "yolo11m-sku110k.onnx",
+    allowed: Annotated[
+        str,
+        typer.Option(
+            envvar="SHELF_BOT_ALLOWED",
+            help="comma-separated Telegram user ids allowed to use the bot; empty = everyone",
+        ),
+    ] = "",
+    save: Annotated[
+        bool, typer.Option(help="keep received photos and counts in runs/bot/photos/<date>/")
+    ] = False,
+    threads: Annotated[int, typer.Option(help="CPU threads for inference; 0 = all")] = 0,
+) -> None:
+    """Run the Telegram bot (token: SHELF_BOT_TOKEN in the environment or .env)."""
+    import logging
+
+    from shelf_vision import bot as tgbot
+    from shelf_vision.counter import ensure_model
+
+    logging.basicConfig(format="%(asctime)s %(levelname)s %(message)s", level=logging.INFO)
+    logging.getLogger("httpx").setLevel(logging.WARNING)  # one line per poll otherwise
+    tgbot.run(
+        ensure_model(model),
+        tgbot.parse_allowed(allowed),
+        env.REPO_ROOT / "runs" / "bot" / "photos" if save else None,
+        threads,
+    )
+
+
 if __name__ == "__main__":
     app()
