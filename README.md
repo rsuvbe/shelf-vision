@@ -3,10 +3,46 @@
 Retail shelf monitoring: detect every product on a shelf photo, recognise which
 SKU it is, and report what is missing or misplaced.
 
-Status: product detection is done (YOLO11m, test mAP50-95 ~0.616, product
-count within ~9% per shelf photo), with an experimental empty-spot marker, a
-web demo and a Telegram bot. Next: a pilot on photos from real shops, then
-SKU recognition.
+**Try it:** [web demo](https://huggingface.co/spaces/rsuvbe/shelf-product-counter)
+(runs in your browser, the photo is not uploaded) · Telegram bot
+[@shelfcounterbot](https://t.me/shelfcounterbot) (runs on my laptop, so it may be offline)
+
+| Web demo | Bot reply |
+|---|---|
+| <img src="docs/img/web-demo.jpg" width="430" alt="Web demo: 117 products boxed in green on a supermarket shelf, two empty slots in red"> | <img src="docs/img/bot-reply.jpg" width="330" alt="Bot reply image: products boxed in green, empty spots in red"> |
+
+The bot sends the photo back with the caption
+*«Товаров на фото: 130 / Похоже на пустые места: 3 / порог уверенности 0.40 · 0.6 с»*.
+Sample photos are from the [SKU-110K](https://github.com/eg4000/SKU110K_CVPR19) validation split.
+
+| | |
+|---|---|
+| Detector | YOLO11m on SKU-110K, test mAP50-95 ≈ 0.616 (published results top out around 0.62) |
+| Product count | off by 8.7% per photo on val (≈13 of 155 products), 0.6 s on a laptop CPU |
+| Empty spots | experimental rule on top of the boxes; finds 79-80% of removed products |
+| Status | detection, demo and bot done; next: pilot in real shops, then SKU recognition |
+
+## Key decisions
+
+- **Stopped tuning the detector at ~0.616 mAP.** SKU-110K results plateau around
+  0.62 and the last runs gained tenths of a point; real shop photos and the
+  product questions (what is missing, which product) matter more now.
+- **Inference settings were tuned instead of retraining.** Evaluating at 1280
+  instead of the 960 it was trained at, and NMS IoU 0.8 instead of 0.7
+  (neighbouring products overlap), each gave about +0.2 mAP for free. The
+  confidence threshold (0.4) was picked for counting error, not mAP.
+- **Negative results are kept.** Pseudo-labelling unlabelled shelves, a low-LR
+  fine-tune, larger input sizes, TTA and WBF ensembles did not help; the table
+  below records each, with settings chosen on val and test scored once.
+- **The demo runs in the browser.** ONNX + onnxruntime-web (WebGPU or
+  multi-threaded WebAssembly) on a static page: free to host, nothing to keep
+  running, and shop photos never leave the device. Its pre- and post-processing
+  was checked against ultralytics (98% of boxes identical).
+- **The bot needs no torch.** The same ONNX model with numpy + onnxruntime, so it
+  fits on a small machine; locally it is a systemd service.
+- **Empty spots without training.** No labels exist for them, so a geometric
+  rule on the boxes, measured by removing labelled products, and marked as
+  experimental where users see it.
 
 ## Detector
 
