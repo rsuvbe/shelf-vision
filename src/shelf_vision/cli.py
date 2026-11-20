@@ -127,28 +127,86 @@ def train(
     )
 
 
+def infer_args(cfg: dict, imgsz: int | None = None, iou: float | None = None) -> dict:
+    """Inference settings for a config: its `infer` section, else the training ones.
+
+    Explicit `imgsz` / `iou` arguments win over both.
+    """
+    train, infer = cfg.get("train", {}), cfg.get("infer", {})
+    return {
+        "imgsz": imgsz or infer.get("imgsz") or train["imgsz"],
+        "iou": iou or infer.get("iou", 0.7),
+        "max_det": infer.get("max_det") or train.get("max_det", 300),
+    }
+
+
 @app.command()
 def evaluate(
     weights: Annotated[Path, typer.Argument(exists=True)],
     config: Annotated[Path, typer.Argument(exists=True)],
     split: str = "test",
+    imgsz: Annotated[int | None, typer.Option(help="override the config's inference size")] = None,
+    iou: Annotated[float | None, typer.Option(help="override the config's NMS IoU")] = None,
 ) -> None:
-    """Evaluate weights on a held-out split."""
+    """Evaluate weights on a held-out split with the config's inference settings."""
     from ultralytics import YOLO
 
     cfg = _load(config)
     rt = env.detect()
     _use_data_dir(rt)
+    args = infer_args(cfg, imgsz, iou)
     metrics = YOLO(str(weights)).val(
         data=_dataset(cfg, config, rt),
         split=split,
-        imgsz=cfg["train"]["imgsz"],
         device=rt.device.split(",")[0],
-        max_det=cfg["train"].get("max_det", 300),
         project=str(rt.runs_dir / "eval"),
         name=f"{config.stem}-{split}",
+        **args,
     )
-    typer.echo(f"mAP50-95 {metrics.box.map:.4f}  mAP50 {metrics.box.map50:.4f}")
+    typer.echo(
+        f"mAP50-95 {metrics.box.map:.4f}  mAP50 {metrics.box.map50:.4f}  "
+        f"(imgsz {args['imgsz']}, iou {args['iou']})"
+    )
+
+
+@app.command()
+def predict(
+    weights: Annotated[Path, typer.Argument(exists=True)],
+    config: Annotated[Path, typer.Argument(exists=True)],
+    source: Annotated[Path, typer.Argument(exists=True, help="image, folder, or .txt list")],
+    conf: Annotated[
+        float | None, typer.Option(help="minimum box confidence (default: the config's infer.conf)")
+    ] = None,
+    save: Annotated[bool, typer.Option(help="save images with boxes drawn")] = True,
+) -> None:
+    """Detect products on shelf photos; writes counts.json and annotated images."""
+    import json
+
+    from ultralytics import YOLO
+
+    cfg = _load(config)
+    rt = env.detect()
+    conf = conf or cfg.get("infer", {}).get("conf", 0.25)
+    out = rt.runs_dir / "predict" / config.stem
+    counts = {}
+    # stream=True with a path source reads images one at a time; a Python list of
+    # paths would be loaded into memory all at once
+    for r in YOLO(str(weights)).predict(
+        str(source),
+        stream=True,
+        conf=conf,
+        device=rt.device.split(",")[0],
+        save=save,
+        project=str(out.parent),
+        name=out.name,
+        exist_ok=True,
+        verbose=False,
+        **infer_args(cfg),
+    ):
+        counts[Path(r.path).name] = len(r.boxes)
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "counts.json").write_text(json.dumps(counts, indent=2))
+    typer.echo(f"{len(counts)} images, {sum(counts.values())} products -> {out}")
 
 
 if __name__ == "__main__":

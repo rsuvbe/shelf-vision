@@ -1,5 +1,9 @@
 # YOLO11m fine-tune on SKU-110K with pseudo-labelled train boxes, at 1280.
 #
+# Result: did not help. Test mAP50-95 0.6104, against 0.6142 for the starting
+# weights evaluated at 1280 without any training; val was flat for all 25
+# epochs (0.602-0.606). Kept for the record; use yolo11m-sku110k.yaml.
+#
 # Why: SKU-110K train has whole shelves left unlabelled (e.g. train_6216: 18
 # boxes on a shelf of ~170 products), so training punishes correct detections.
 # The 11m run (test mAP50-95 0.612) re-labelled train at imgsz 1280: boxes with

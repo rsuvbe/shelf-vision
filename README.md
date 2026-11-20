@@ -3,7 +3,51 @@
 Retail shelf monitoring: detect every product on a shelf photo, recognise which
 SKU it is, and report what is missing or misplaced.
 
-Status: week 1, detection baseline.
+Status: product detection is done (YOLO11m, test mAP50-95 ~0.616, product
+count within ~9% per shelf photo). Next: photos from real shops, empty-gap
+detection, SKU recognition.
+
+## Detector
+
+Weights: [`yolo11m-sku110k.pt`](https://github.com/rsuvbe/shelf-vision/releases/download/detector-v1/yolo11m-sku110k.pt)
+(GitHub release `detector-v1`, 40 MB). Inference settings live in the `infer`
+section of `configs/detect/yolo11m-sku110k.yaml`: imgsz 1280, NMS IoU 0.8,
+conf 0.4.
+
+```bash
+mkdir -p runs/weights
+gh release download detector-v1 -p yolo11m-sku110k.pt -D runs/weights
+uv run shelf predict runs/weights/yolo11m-sku110k.pt configs/detect/yolo11m-sku110k.yaml <photo, folder or .txt list>
+# -> runs/predict/yolo11m-sku110k/: images with boxes + counts.json
+uv run shelf evaluate runs/weights/yolo11m-sku110k.pt configs/detect/yolo11m-sku110k.yaml --split test
+```
+
+### How it got here
+
+SKU-110K test split (2,936 photos, ~147 products each). mAP50-95 from
+`model.val()` unless marked.
+
+| Run | Test mAP50-95 | Notes |
+|---|---|---|
+| YOLO11s, 960, 11.3 h | 0.604 | plateaued by epoch ~60 |
+| + low-LR fine-tune | 0.601 | overfit |
+| YOLO11m, 960, 11.1 h | 0.612 | `yolo11m-sku110k.yaml` |
+| same weights evaluated at 1280 | 0.614 | no training |
+| + pseudo-label fine-tune at 1280 | 0.610 | `yolo11m-sku110k-pl.yaml`, did not help |
+| same weights, 1280, NMS IoU 0.8 | ~0.616 | own evaluator*, +0.2 over IoU 0.7 |
+| + TTA | ~0.617 | own evaluator*, not worth 2-3x the time |
+| WBF ensembles of the above | lower | -0.5 on val, dense shelves merge neighbours |
+
+\* `notebooks/kaggle_tune.ipynb` scores raw predictions with ultralytics'
+matching and AP code (matches `model.val()` to 1e-4 on the same predictions).
+Its absolute test numbers are ~0.005 lower than `model.val()`, which repairs
+damaged JPEGs while `predict` reads them as they are; the table shifts them by
+that offset. Settings were chosen on val and test was scored once.
+
+Product counting (val, 588 photos, 155 labelled products on average): at conf
+0.4 the count is off by 14.7 products per photo (9.4%), with almost no bias.
+Lower thresholds overcount (+15 at 0.25), higher ones undercount. Some of the
+"extra" products are real ones the annotators skipped.
 
 ## Layout
 

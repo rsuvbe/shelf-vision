@@ -17,3 +17,22 @@ train:
   patience: 15        # also with --hours: the 11.32h run plateaued by epoch ~60
   seed: 0
   plots: true
+
+# Deployment settings, used by `shelf evaluate` and `shelf predict`.
+# Tuned on val with the 11.08h run's best.pt (notebooks/kaggle_tune.ipynb), then
+# scored once on test:
+# - imgsz 1280: +0.2 test mAP50-95 over the 960 it was trained at; 1536 and
+#   1792 were no better on val.
+# - NMS IoU 0.8: best of 0.5-0.95 on val (0.8 and 0.85 tie, 0.9 drops), +0.2
+#   over the default 0.7. Neighbouring products overlap, so 0.7 suppresses
+#   real boxes. Costs ~0.25 of mAP50 (a few more low-confidence doubles).
+# - conf 0.4 (predict only; evaluate scores all boxes): lowest product-count
+#   error on val, 14.7 per photo (9.4%) against 155 labelled; 0.25 overcounts
+#   by +15. At this conf NMS 0.7 and 0.8 count the same. Part of the
+#   "overcount" is products the annotators skipped.
+# Not used: TTA (+0.05 for 2-3x the time), WBF of several configs (-0.5).
+infer:
+  imgsz: 1280
+  iou: 0.8
+  conf: 0.4
+  max_det: 1000
