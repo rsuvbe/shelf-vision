@@ -22,10 +22,14 @@ uv run shelf predict runs/weights/yolo11m-sku110k.pt configs/detect/yolo11m-sku1
 uv run shelf evaluate runs/weights/yolo11m-sku110k.pt configs/detect/yolo11m-sku110k.yaml --split test
 ```
 
-Live demo: a Gradio app in `space/` (upload a shelf photo, get boxes and a
-count), deployed as a Hugging Face Space. It runs on CPU with the settings
-above. Deploy or update it with
-`hf upload <user>/shelf-product-counter space . --repo-type space`.
+Live demo: [Shelf product counter](https://huggingface.co/spaces/rsuvbe/shelf-product-counter),
+a static Hugging Face Space in `space/`. The model runs in the browser
+(onnxruntime-web: WebGPU, or multi-threaded WebAssembly), so the photo never
+leaves the device; about 2 s per photo on a laptop CPU. To update it:
+`space/build.sh` (exports the ONNX model, fetches the runtime), then
+`hf upload rsuvbe/shelf-product-counter space . --repo-type space`.
+`demo/gradio/` is the same demo as a server-side Gradio app, for running
+locally (`python demo/gradio/app.py`); Gradio Spaces need HF PRO.
 
 ### How it got here
 

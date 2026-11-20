@@ -3,23 +3,27 @@ title: Shelf Product Counter
 emoji: 🛒
 colorFrom: green
 colorTo: blue
-sdk: gradio
-sdk_version: 6.32.0
-python_version: "3.12"
-app_file: app.py
+sdk: static
+app_file: index.html
 pinned: false
-short_description: Count products on a store shelf photo (YOLO11m, SKU-110K)
+short_description: Count products on a shelf photo, in the browser
+custom_headers:
+  cross-origin-embedder-policy: require-corp
+  cross-origin-opener-policy: same-origin
+  cross-origin-resource-policy: cross-origin
 ---
 
 # Shelf product counter
 
 Demo of the product detector from [shelf-vision](https://github.com/rsuvbe/shelf-vision).
-Upload a shelf photo; the app draws a box around every product and counts them.
+Upload a shelf photo; the page draws a box around every product and counts them.
 
-- Model: YOLO11m trained on SKU-110K, weights from the
-  [detector-v1 release](https://github.com/rsuvbe/shelf-vision/releases/tag/detector-v1)
-  (downloaded on first start).
-- Inference: imgsz 1280, NMS IoU 0.8, confidence 0.4 by default.
-- Runs on CPU, a few seconds per photo.
+Everything runs in the browser with [onnxruntime-web](https://onnxruntime.ai/):
+WebGPU when the device has it, WebAssembly otherwise. The photo is never uploaded.
 
-The source of this Space lives in the `space/` folder of the GitHub repo.
+- Model: YOLO11m trained on SKU-110K (release `detector-v1`), exported to ONNX at 1280.
+- Inference: NMS IoU 0.8, confidence 0.4 by default (adjustable).
+- First visit downloads ~110 MB (model + runtime); the browser caches it.
+
+The cross-origin headers let WebAssembly use several threads when the page is
+opened directly, which makes the CPU fallback several times faster.

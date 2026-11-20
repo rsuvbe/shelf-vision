@@ -1,0 +1,4 @@
+# built by build.sh, uploaded to the Space but too big for git
+*.onnx
+ort.webgpu.min.mjs
+ort-wasm-simd-threaded.*
