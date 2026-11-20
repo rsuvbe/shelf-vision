@@ -7,6 +7,7 @@ own predict on 98% of boxes and counts as accurately.
 
 from __future__ import annotations
 
+import io
 import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
@@ -39,6 +40,15 @@ def letterbox(bgr: np.ndarray, size: int) -> tuple[np.ndarray, Letterbox]:
     canvas[py : py + nh, px : px + nw] = cv2.resize(bgr, (nw, nh), interpolation=cv2.INTER_LINEAR)
     x = canvas[:, :, ::-1].transpose(2, 0, 1)[None].astype(np.float32) / 255
     return x, Letterbox(r, px, py, w, h)
+
+
+def decode_image(data: bytes) -> np.ndarray:
+    """BGR array from image bytes, with EXIF rotation applied (photos sent as files keep it)."""
+    from PIL import Image, ImageOps
+
+    with Image.open(io.BytesIO(data)) as im:
+        rgb = np.asarray(ImageOps.exif_transpose(im).convert("RGB"))
+    return np.ascontiguousarray(rgb[:, :, ::-1])
 
 
 def _iou(box: np.ndarray, boxes: np.ndarray) -> np.ndarray:
@@ -77,14 +87,16 @@ def decode(out: np.ndarray, lb: Letterbox, conf: float) -> tuple[np.ndarray, np.
     return boxes, score
 
 
-def draw(bgr: np.ndarray, boxes: np.ndarray) -> np.ndarray:
-    """Copy of the photo with a green rectangle per product."""
+def draw(bgr: np.ndarray, boxes: np.ndarray, gaps: np.ndarray | None = None) -> np.ndarray:
+    """Copy of the photo: green rectangle per product, thicker red one per empty spot."""
     import cv2
 
     out = bgr.copy()
     t = max(2, round(max(bgr.shape[:2]) / 500))
     for x1, y1, x2, y2 in boxes.astype(int):
         cv2.rectangle(out, (x1, y1), (x2, y2), (118, 230, 0), t)
+    for x1, y1, x2, y2 in (gaps if gaps is not None else np.zeros((0, 4))).astype(int):
+        cv2.rectangle(out, (x1, y1), (x2, y2), (40, 40, 235), 2 * t)
     return out
 
 

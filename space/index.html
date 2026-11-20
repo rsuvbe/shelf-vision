@@ -81,6 +81,8 @@
     YOLO11m trained on <a href="https://github.com/eg4000/SKU110K_CVPR19">SKU-110K</a>:
     test mAP50-95 ≈ 0.616, product count within ~9% per photo on its validation split.
     It finds products but does not yet tell which product is which.
+    Red boxes mark gaps inside a shelf row that look empty: an experimental rule on top of the
+    boxes, roughly one in four is a product the model missed. Photograph the shelf head-on.
     Lower confidence finds more products and more false boxes; 0.4 counts best.
     Code: <a href="https://github.com/rsuvbe/shelf-vision">rsuvbe/shelf-vision</a>.
   </footer>

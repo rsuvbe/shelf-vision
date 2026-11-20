@@ -4,8 +4,9 @@ Retail shelf monitoring: detect every product on a shelf photo, recognise which
 SKU it is, and report what is missing or misplaced.
 
 Status: product detection is done (YOLO11m, test mAP50-95 ~0.616, product
-count within ~9% per shelf photo). Next: photos from real shops, empty-gap
-detection, SKU recognition.
+count within ~9% per shelf photo), with an experimental empty-spot marker, a
+web demo and a Telegram bot. Next: a pilot on photos from real shops, then
+SKU recognition.
 
 ## Detector
 
@@ -45,11 +46,54 @@ uv run shelf bot                                           # long polling, no pu
 uv run shelf bot --allowed 123,456 --save                  # only these users; keep photos
 ```
 
+The bot also marks possible empty spots in red (`/gaps` turns that off for a
+chat); see *Empty spots* below.
+
 `--save` stores every received photo with its count in `runs/bot/photos/<date>/`,
 which turns the bot into a data collection tool for shop pilots. Without
 `--allowed` anyone who finds the bot can use it; a stranger gets their Telegram
 id in the reply, so it is easy to add them. In chat, `/conf 0.3` changes the
 confidence threshold for that chat.
+
+On the laptop the bot runs as a systemd user service that starts at boot and
+restarts on failure (`deploy/shelf-bot.service`):
+
+```bash
+cp deploy/shelf-bot.service ~/.config/systemd/user/
+systemctl --user daemon-reload && systemctl --user enable --now shelf-bot
+journalctl --user -u shelf-bot -f        # log
+```
+
+### Empty spots (experimental)
+
+`shelf_vision.gaps` finds empty spots from the product boxes alone: boxes whose
+bottom edges line up form a shelf row, and a gap inside a row at least 0.7
+product widths wide and 0.6 heights tall, standing on the row's shelf line and
+not covered by other boxes, is marked. Row ends are skipped. The browser demo
+runs the same rules (`space/app.js`).
+
+SKU-110K has no empty-spot labels, so it was checked two ways on val:
+
+- Synthetic: removing one or two neighbouring products from a row of labelled
+  boxes, the removed spot is found 79-80% of the time.
+- By eye on five photos: about three in four marked spots are really empty;
+  most false ones are products the detector missed. Photos taken at a steep
+  angle break the row grouping, so shelves should be photographed head-on.
+
+Real numbers need labelled shop photos (next section).
+
+### Shop pilot
+
+```bash
+uv run shelf prelabel runs/bot/photos/2026-11-21 runs/pilot/day1   # model boxes as YOLO labels
+# fix the boxes in a YOLO-capable tool (X-AnyLabeling, labelImg, ...)
+uv run shelf pilot-eval runs/pilot/day1                            # count error, precision/recall
+```
+
+Pre-labels use conf 0.3 because deleting a wrong box is quicker than drawing a
+missed one. Corrected pre-labels lean towards the model's boxes, so treat the
+first numbers as optimistic; on SKU-110K val with its own labels `pilot-eval`
+reports 8.9% count error, precision 0.93, recall 0.93.
 
 ### How it got here
 

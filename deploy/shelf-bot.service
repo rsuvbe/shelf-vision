@@ -1,0 +1,20 @@
+[Unit]
+Description=shelf-vision Telegram bot (@shelfcounterbot): counts products on shelf photos
+Wants=network-online.target
+After=network-online.target
+# keep retrying forever: the laptop wakes up and joins Wi-Fi at random times
+StartLimitIntervalSec=0
+
+[Service]
+# Token comes from the repo's .env (SHELF_BOT_TOKEN); photos are kept for the
+# shop pilot in runs/bot/photos/. Add --allowed <ids> to restrict who can use it.
+WorkingDirectory=%h/Projects/shelf-vision
+ExecStart=%h/Projects/shelf-vision/.venv/bin/shelf bot --save
+Environment=PYTHONUNBUFFERED=1
+Restart=always
+RestartSec=30
+# inference takes every core for ~0.6 s; stay out of the way of the desktop
+Nice=10
+
+[Install]
+WantedBy=default.target

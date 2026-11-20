@@ -209,11 +209,73 @@ def predict(
     typer.echo(f"{len(counts)} images, {sum(counts.values())} products -> {out}")
 
 
+ONNX_DEFAULT = env.REPO_ROOT / "runs" / "weights" / "yolo11m-sku110k.onnx"
+
+
+@app.command()
+def prelabel(
+    photos: Annotated[Path, typer.Argument(exists=True, help="folder with shelf photos")],
+    out: Annotated[Path, typer.Argument(help="new YOLO-format folder: images/, labels/")],
+    conf: Annotated[
+        float,
+        typer.Option(help="lower than for counting: deleting a box is quicker than drawing one"),
+    ] = 0.3,
+    model: Annotated[Path, typer.Option(help="ONNX detector")] = ONNX_DEFAULT,
+) -> None:
+    """Pre-label real shelf photos with the model, for correction in a labelling tool."""
+    import cv2
+
+    from shelf_vision.counter import ShelfCounter, decode_image, ensure_model
+    from shelf_vision.pilot import list_images, to_yolo
+
+    counter = ShelfCounter(ensure_model(model))
+    (out / "images").mkdir(parents=True, exist_ok=True)
+    (out / "labels").mkdir(parents=True, exist_ok=True)
+    (out / "classes.txt").write_text("product\n")
+    images = list_images(photos)
+    for i, p in enumerate(images):
+        # write the photo upright: labelling tools disagree on EXIF rotation
+        bgr = decode_image(p.read_bytes())
+        name = f"{i:04d}_{p.stem}"
+        cv2.imwrite(str(out / "images" / f"{name}.jpg"), bgr, [cv2.IMWRITE_JPEG_QUALITY, 95])
+        boxes, _ = counter.detect(bgr, conf)
+        (out / "labels" / f"{name}.txt").write_text(to_yolo(boxes, bgr.shape[1], bgr.shape[0]))
+    typer.echo(f"{len(images)} photos pre-labelled at conf {conf} -> {out}")
+
+
+@app.command("pilot-eval")
+def pilot_eval(
+    folder: Annotated[Path, typer.Argument(exists=True, help="YOLO folder with corrected labels")],
+    conf: Annotated[float, typer.Option(help="threshold to score; the bot uses 0.4")] = 0.4,
+    model: Annotated[Path, typer.Option(help="ONNX detector")] = ONNX_DEFAULT,
+) -> None:
+    """Score the model on corrected real-shop labels: count error, box precision/recall."""
+    import cv2
+
+    from shelf_vision.counter import ShelfCounter, ensure_model
+    from shelf_vision.pilot import PhotoScore, from_yolo, list_images, match_count, summarise
+
+    counter = ShelfCounter(ensure_model(model))
+    scores = []
+    for p in list_images(folder / "images"):
+        label = folder / "labels" / f"{p.stem}.txt"
+        if not label.exists():
+            continue
+        bgr = cv2.imread(str(p))
+        h, w = bgr.shape[:2]
+        gt = from_yolo(label.read_text(), w, h)
+        pred, _ = counter.detect(bgr, conf)
+        scores.append(PhotoScore(p.name, len(gt), len(pred), match_count(pred, gt)))
+    if not scores:
+        raise typer.BadParameter(f"no labelled photos in {folder}/images")
+    typer.echo(summarise(scores))
+
+
 @app.command()
 def bot(
     model: Annotated[
         Path, typer.Option(help="ONNX detector; downloaded from the detector-v1 release if missing")
-    ] = env.REPO_ROOT / "runs" / "weights" / "yolo11m-sku110k.onnx",
+    ] = ONNX_DEFAULT,
     allowed: Annotated[
         str,
         typer.Option(

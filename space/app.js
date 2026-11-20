@@ -139,6 +139,66 @@ function nms(boxes, scores, conf) {
   return keep;
 }
 
+// Empty spots, same rules as shelf_vision/gaps.py: boxes whose bottoms line up
+// form a shelf row; an uncovered gap inside a row, at least 0.7 product widths
+// wide and 0.6 product heights tall, standing on the row's shelf line.
+const median = (a) => {
+  const s = [...a].sort((x, y) => x - y);
+  const m = s.length >> 1;
+  return s.length % 2 ? s[m] : (s[m - 1] + s[m]) / 2;
+};
+
+function shelfRows(b) {
+  const n = b.length;
+  if (!n) return [];
+  const order = [...b.keys()].sort((i, j) => b[i][3] - b[j][3]);
+  const groups = [[order[0]]];
+  for (const i of order.slice(1)) {
+    const g = groups[groups.length - 1];
+    const bottom = median(g.map((k) => b[k][3]));
+    const height = median(g.map((k) => b[k][3] - b[k][1]));
+    if (Math.abs(b[i][3] - bottom) <= 0.35 * height) g.push(i);
+    else groups.push([i]);
+  }
+  return groups;
+}
+
+function covered(rect, b) {
+  const [x1, y1, x2, y2] = rect;
+  let inside = 0;
+  for (let gy = 0; gy < 7; gy++) {
+    for (let gx = 0; gx < 11; gx++) {
+      const px = x1 + ((gx + 0.5) * (x2 - x1)) / 11;
+      const py = y1 + ((gy + 0.5) * (y2 - y1)) / 7;
+      if (b.some((q) => px >= q[0] && px <= q[2] && py >= q[1] && py <= q[3])) inside++;
+    }
+  }
+  return inside / 77;
+}
+
+function findGaps(b) {
+  const out = [];
+  for (const idx of shelfRows(b)) {
+    if (idx.length < 3) continue;
+    const r = idx.map((i) => b[i]).sort((p, q) => p[0] - q[0]);
+    const width = median(r.map((q) => q[2] - q[0]));
+    const height = median(r.map((q) => q[3] - q[1]));
+    const shelf = median(r.map((q) => q[3]));
+    let right = -Infinity;
+    for (let k = 0; k < r.length - 1; k++) {
+      right = Math.max(right, r[k][2]);
+      const x1 = right, x2 = r[k + 1][0];
+      if (x2 - x1 < 0.7 * width) continue;
+      const top = Math.min(r[k][1], r[k + 1][1]);
+      const bottom = Math.max(r[k][3], r[k + 1][3]);
+      const rect = [x1, top, x2, bottom];
+      if (Math.abs(bottom - shelf) <= 0.35 * height && bottom - top >= 0.6 * height &&
+          covered(rect, b) <= 0.15) out.push(rect);
+    }
+  }
+  return out;
+}
+
 function draw() {
   if (!last) return;
   const conf = Number($("conf").value);
@@ -151,11 +211,18 @@ function draw() {
   ctx.drawImage(bitmap, 0, 0);
   ctx.lineWidth = Math.max(2, Math.round(Math.max(bitmap.width, bitmap.height) / 500));
   ctx.strokeStyle = "#00e676";
-  for (const i of keep) {
-    const b = last.boxes.subarray(4 * i, 4 * i + 4);
-    ctx.strokeRect(b[0], b[1], b[2] - b[0], b[3] - b[1]);
-  }
-  $("count").innerHTML = `${keep.length} products <small>confidence ≥ ${conf.toFixed(2)}</small>`;
+  const kept = keep.map((i) => Array.from(last.boxes.subarray(4 * i, 4 * i + 4)));
+  for (const b of kept) ctx.strokeRect(b[0], b[1], b[2] - b[0], b[3] - b[1]);
+  const gaps = findGaps(kept);
+  ctx.strokeStyle = "#ff3b30";
+  ctx.lineWidth *= 2;
+  for (const g of gaps) ctx.strokeRect(g[0], g[1], g[2] - g[0], g[3] - g[1]);
+  const gapText = gaps.length
+    ? `${gaps.length} possible empty spot${gaps.length > 1 ? "s" : ""} (red, experimental)`
+    : "no empty spots spotted";
+  $("count").innerHTML =
+    `${keep.length} products <small>${gapText} · confidence ≥ ${conf.toFixed(2)}</small>`;
+  last.gaps = gaps.length;
   $("result").classList.remove("hidden");
   status(`Done in ${(last.ms / 1000).toFixed(1)} s on ${backend}.`);
 }
@@ -191,7 +258,12 @@ $("conf").addEventListener("input", (e) => {
 });
 
 // exposed for automated checks
-window.__shelf = { ready: () => !!session, run: onFile, result: () => last && nms(last.boxes, last.scores, Number($("conf").value)).length };
+window.__shelf = {
+  ready: () => !!session,
+  run: onFile,
+  result: () => last && nms(last.boxes, last.scores, Number($("conf").value)).length,
+  gaps: () => last && last.gaps,
+};
 
 init().catch((e) => {
   status(`Could not load the model: ${e.message || e}`);

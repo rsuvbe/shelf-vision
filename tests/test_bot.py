@@ -2,7 +2,8 @@ import io
 
 from PIL import Image
 
-from shelf_vision.bot import caption, decode_image, parse_allowed, parse_conf
+from shelf_vision.bot import caption, parse_allowed, parse_conf
+from shelf_vision.counter import decode_image
 
 
 def test_parse_conf_accepts_comma_and_range():

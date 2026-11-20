@@ -7,7 +7,6 @@ from SHELF_BOT_TOKEN in the environment or in the repo's .env file.
 from __future__ import annotations
 
 import asyncio
-import io
 import json
 import logging
 import os
@@ -17,8 +16,9 @@ from pathlib import Path
 
 import numpy as np
 
-from shelf_vision.counter import ShelfCounter, draw
+from shelf_vision.counter import ShelfCounter, decode_image, draw
 from shelf_vision.env import REPO_ROOT
+from shelf_vision.gaps import find_gaps
 
 log = logging.getLogger("shelf_vision.bot")
 
@@ -31,7 +31,10 @@ START_TEXT = (
     "• Для лучшей точности отправляйте фото файлом (скрепка → Файл): "
     "так Telegram его не сжимает.\n"
     "• /conf 0.3 меняет порог уверенности: ниже находит больше товаров, "
-    "но и больше лишних рамок. По умолчанию 0.4.\n\n"
+    "но и больше лишних рамок. По умолчанию 0.4.\n"
+    "• Красным отмечаю места, похожие на пустые (экспериментально: "
+    "примерно каждое четвёртое — ложное, обычно там, где я не заметил товар). "
+    "/gaps включает и выключает эту отметку.\n\n"
     "Я считаю товары, но пока не различаю, какой именно это товар. "
     "Ошибка подсчёта на тестовых данных около 9%."
 )
@@ -70,15 +73,6 @@ def parse_conf(args: list[str]) -> float | None:
     return conf if 0.05 <= conf <= 0.95 else None
 
 
-def decode_image(data: bytes) -> np.ndarray:
-    """BGR array from image bytes, with EXIF rotation applied (photos sent as files keep it)."""
-    from PIL import Image, ImageOps
-
-    with Image.open(io.BytesIO(data)) as im:
-        rgb = np.asarray(ImageOps.exif_transpose(im).convert("RGB"))
-    return np.ascontiguousarray(rgb[:, :, ::-1])
-
-
 def encode_jpeg(bgr: np.ndarray) -> bytes:
     import cv2
 
@@ -92,8 +86,12 @@ def encode_jpeg(bgr: np.ndarray) -> bytes:
     return buf.tobytes()
 
 
-def caption(n: int, conf: float, seconds: float) -> str:
-    return f"Товаров на фото: {n}\nпорог уверенности {conf:.2f} · {seconds:.1f} с"
+def caption(n: int, conf: float, seconds: float, gaps: int | None = None) -> str:
+    lines = [f"Товаров на фото: {n}"]
+    if gaps is not None:
+        lines.append(f"Похоже на пустые места: {gaps}" if gaps else "Пустых мест не вижу")
+    lines.append(f"порог уверенности {conf:.2f} · {seconds:.1f} с")
+    return "\n".join(lines)
 
 
 def run(model: Path, allowed: set[int], save_dir: Path | None, threads: int = 0) -> None:
@@ -130,6 +128,13 @@ def run(model: Path, allowed: set[int], save_dir: Path | None, threads: int = 0)
         context.chat_data["conf"] = conf
         await update.effective_message.reply_text(f"Порог уверенности: {conf:.2f}")
 
+    async def toggle_gaps(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+        if not permitted(update):
+            return await deny(update)
+        context.chat_data["gaps"] = not context.chat_data.get("gaps", True)
+        state = "показываю" if context.chat_data["gaps"] else "не показываю"
+        await update.effective_message.reply_text(f"Пустые места теперь {state}.")
+
     async def on_image(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         if not permitted(update):
             return await deny(update)
@@ -147,17 +152,20 @@ def run(model: Path, allowed: set[int], save_dir: Path | None, threads: int = 0)
             t = time.perf_counter()
             boxes, _ = await asyncio.to_thread(counter.detect, bgr, conf)
             seconds = time.perf_counter() - t
-        reply = await asyncio.to_thread(lambda: encode_jpeg(draw(bgr, boxes)))
-        await msg.reply_photo(reply, caption=caption(len(boxes), conf, seconds))
+        gaps = find_gaps(boxes) if context.chat_data.get("gaps", True) else None
+        reply = await asyncio.to_thread(lambda: encode_jpeg(draw(bgr, boxes, gaps)))
+        n_gaps = None if gaps is None else len(gaps)
+        await msg.reply_photo(reply, caption=caption(len(boxes), conf, seconds, n_gaps))
         log.info(
             "user %s: %d products, conf %.2f, %.1fs", msg.from_user.id, len(boxes), conf, seconds
         )
         if save_dir is not None:
-            save(save_dir, data, msg.from_user.id, len(boxes), conf)
+            save(save_dir, data, msg.from_user.id, len(boxes), conf, n_gaps)
 
     app = Application.builder().token(load_token()).concurrent_updates(True).build()
     app.add_handler(CommandHandler(["start", "help"], start))
     app.add_handler(CommandHandler("conf", set_conf))
+    app.add_handler(CommandHandler("gaps", toggle_gaps))
     app.add_handler(MessageHandler(filters.PHOTO | filters.Document.IMAGE, on_image))
     log.info(
         "bot running (model %s, %s)",
@@ -167,7 +175,9 @@ def run(model: Path, allowed: set[int], save_dir: Path | None, threads: int = 0)
     app.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
-def save(save_dir: Path, data: bytes, user_id: int, count: int, conf: float) -> None:
+def save(
+    save_dir: Path, data: bytes, user_id: int, count: int, conf: float, gaps: int | None
+) -> None:
     """Keep the original photo and its count, one folder per day (for later evaluation)."""
     now = datetime.now()
     day = save_dir / now.strftime("%Y-%m-%d")
